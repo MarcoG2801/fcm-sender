@@ -9,13 +9,16 @@ app.use(express.json());
 app.use(cors()); // Abilita i permessi di comunicazione cross-origin
 
 // Recuperiamo la stringa delle credenziali dalle variabili d'ambiente
-const serviceAccountRaw = process.env.FIREBASE_SERVICE_ACCOUNT;
+const serviceAccountPath = '/etc/secrets/service-account.json'; // Percorso di default dei Secret Files su Render
+let serviceAccount;
 
-if (!serviceAccountRaw) {
-  console.error("ERRORE: La variabile FIREBASE_SERVICE_ACCOUNT non è configurata!");
+try {
+  const serviceAccountRaw = fs.readFileSync(serviceAccountPath, 'utf8');
+  serviceAccount = JSON.parse(serviceAccountRaw);
+} catch (err) {
+  console.error("ERRORE: Impossibile leggere il file service-account.json!", err);
   process.exit(1);
 }
-
 // Convertiamo la stringa JSON in un oggetto JavaScript
 const serviceAccount = JSON.parse(serviceAccountRaw);
 
