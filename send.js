@@ -1,4 +1,4 @@
-const express = require('require'); // Nota: se usi commonjs mantieni express così
+const express = require('express'); // <-- Corretto qui (era 'require')
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getFirestore } = require('firebase-admin/firestore');
