@@ -1,7 +1,6 @@
 const express = require('express');
 const admin = require('firebase-admin');
 const cors = require('cors');
-const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
@@ -9,38 +8,32 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- INIZIALIZZAZIONE SICURA DI FIREBASE ---
-const secretFilePath = path.join(__dirname, 'serviceAccountKey.json');
+// Definizione del percorso del Secret File di Render
+const renderSecretPath = '/etc/secrets/service-account.json';
+const localSecretPath = './serviceAccountKey.json';
 
-try {
-  if (fs.existsSync(secretFilePath)) {
-    // Se il file esiste (sia in locale che tramite Secret File di Render)
-    const serviceAccount = require(secretFilePath);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    console.log("Firebase Admin SDK inizializzato correttamente tramite file JSON.");
-  } else {
-    // Alternativa di emergenza: se decidi in futuro di usare una stringa nelle variabili d'ambiente
-    if (process.env.FIREBASE_CONFIG) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-      console.log("Firebase Admin SDK inizializzato tramite variabile d'ambiente.");
-    } else {
-      throw new Error("File serviceAccountKey.json mancante e nessuna variabile d'ambiente trovata.");
-    }
-  }
-} catch (error) {
-  console.error("Errore critico durante l'inizializzazione di Firebase:", error.message);
-  process.exit(1); // Blocca l'app se Firebase non può partire
+let serviceAccount;
+
+// Controlla se il file esiste nel percorso dei Secret Files di Render
+if (fs.existsSync(renderSecretPath)) {
+  serviceAccount = require(renderSecretPath);
+  console.log("Inizializzazione Firebase con il Secret File di Render.");
+} else if (fs.existsSync(localSecretPath)) {
+  serviceAccount = require(localSecretPath);
+  console.log("Inizializzazione Firebase con il file locale (Sviluppo).");
+} else {
+  console.error("ERRORE: File delle credenziali Firebase non trovato!");
+  process.exit(1); // Blocca l'applicazione se manca il file
 }
 
-const db = admin.firestore();
-// -------------------------------------------
+// Inizializzazione Firebase Admin SDK
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
-// Endpoint per inviare le notifiche (rimane invariato)
+const db = admin.firestore();
+
+// --- Il resto del tuo endpoint rimane identico ---
 app.post('/api/send-notification', async (req, res) => {
   const { centroId, title, body } = req.body;
 
@@ -60,13 +53,11 @@ app.post('/api/send-notification', async (req, res) => {
     const tokens = [];
     usersSnapshot.forEach(doc => {
       const userData = doc.data();
-      if (userData.token) {
-        tokens.push(userData.token);
-      }
+      if (userData.token) tokens.push(userData.token);
     });
 
     if (tokens.length === 0) {
-      return res.status(404).json({ message: 'Nessun token valido trovato.' });
+      return res.status(404).json({ message: 'Nessun token FCM trovato.' });
     }
 
     const message = {
@@ -79,11 +70,11 @@ app.post('/api/send-notification', async (req, res) => {
     return res.status(200).json({
       success: true,
       successCount: response.successCount,
-      message: `Inviate con successo a ${response.successCount} dispositivi.`
+      message: `Notifiche inviate a ${response.successCount} dispositivi.`
     });
 
   } catch (error) {
-    console.error("Errore invio:", error);
+    console.error(error);
     return res.status(500).json({ error: error.message });
   }
 });
