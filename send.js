@@ -1,11 +1,5 @@
 const express = require('express');
 const admin = require('firebase-admin');
-
-const app = express();
-app.use(express.json());
-
-const express = require('express');
-const admin = require('firebase-admin');
 const path = require('path');
 
 const app = express();
