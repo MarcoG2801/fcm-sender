@@ -1,8 +1,11 @@
 const express = require('express');
 const admin = require('firebase-admin');
 const path = require('path');
+const cors = require('cors'); // <-- 1. Importa CORS
 
 const app = express();
+
+app.use(cors()); // <-- 2. Abilita CORS per tutte le richieste (permette a Flutter Web di connettersi)
 app.use(express.json());
 
 // Percorso del Secret File impostato su Render
