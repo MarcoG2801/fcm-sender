@@ -7,22 +7,34 @@ const fs = require('fs');
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // Previene i blocchi CORS su Flutter Web
+app.use(cors());
 
-// Percorso in cui Render salva il Secret File
+// Percorso ufficiale dei Secret Files su Render
 const serviceAccountPath = '/etc/secrets/service-account.json';
 let serviceAccount;
 
 try {
+  // Verifichiamo se il file esiste fisicamente sul server Render
+  if (!fs.existsSync(serviceAccountPath)) {
+    throw new Error(`Il file non esiste nel percorso: ${serviceAccountPath}`);
+  }
+
   const serviceAccountRaw = fs.readFileSync(serviceAccountPath, 'utf8');
   serviceAccount = JSON.parse(serviceAccountRaw);
-  console.log("✅ Credenziali service-account.json lette con successo.");
+  
+  // Controllo di integrità del JSON
+  if (!serviceAccount.project_id || !serviceAccount.private_key) {
+    throw new Error("Il file JSON esiste ma mancano chiavi fondamentali (project_id o private_key)!");
+  }
+
+  console.log(`✅ Credenziali lette correttamente per il progetto: ${serviceAccount.project_id}`);
 } catch (err) {
-  console.error("❌ ERRORE CRITICO: File di configurazione assente su Render!", err);
-  process.exit(1);
+  console.error("❌ ERRORE DI AUTENTICAZIONE CRITICO:", err.message);
+  // Arrestiamo il processo per evitare che l'app rimanga attiva in uno stato non autenticato
+  process.exit(1); 
 }
 
-// Inizializzazione Firebase Admin
+// Inizializzazione Firebase Admin con l'oggetto validato
 initializeApp({
   credential: cert(serviceAccount)
 });
