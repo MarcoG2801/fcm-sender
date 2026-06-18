@@ -3,6 +3,8 @@ const { initializeApp, cert } = require('firebase-admin/app');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getFirestore } = require('firebase-admin/firestore');
 const cors = require('cors'); // Consigliato per evitare blocchi dall'app Flutter Web
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(express.json());
