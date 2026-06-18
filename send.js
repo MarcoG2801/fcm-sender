@@ -26,10 +26,21 @@ initializeApp({
 
 const db = getFirestore();
 
-// Endpoint per inviare le notifiche
+// Endpoint aggiornato per inviare le notifiche filtrate per centro estivo
 app.post('/api/send-notification', async (req, res) => {
   try {
-    const usersSnapshot = await db.collection('users').get();
+    const { centroId, title, body } = req.body;
+
+    if (!centroId) {
+      return res.status(400).json({ success: false, message: 'Il parametro centroId è obbligatorio.' });
+    }
+
+    // Eseguiamo una query filtrando per il centro estivo specifico
+    // Nota: usa .where('centriIds', 'array-contains', centroId) se centriIds è un array nel DB
+    const usersSnapshot = await db.collection('users')
+      .where('centriIds', 'array-contains', centroId)
+      .get();
+
     const tokens = [];
 
     usersSnapshot.forEach(doc => {
@@ -40,17 +51,18 @@ app.post('/api/send-notification', async (req, res) => {
     });
 
     if (tokens.length === 0) {
-      return res.status(404).json({ success: false, message: 'Nessun token trovato nel DB.' });
+      return res.status(404).json({ success: false, message: 'Nessun token trovato per questo centro estivo.' });
     }
 
-    const title = req.body.title || 'Ciao Utente!';
-    const body = req.body.body || 'Nuova notifica!';
+    const notificationTitle = title || 'Ciao Utente!';
+    const notificationBody = body || 'Nuova notifica!';
 
     const message = {
-      notification: { title, body },
+      notification: { title: notificationTitle, body: notificationBody },
       data: {
         click_action: 'FLUTTER_NOTIFICATION_CLICK',
-        sezione: 'profilo'
+        sezione: 'profilo',
+        centroId: centroId // Può essere utile lato client
       },
       tokens: tokens 
     };
@@ -64,12 +76,7 @@ app.post('/api/send-notification', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Errore:', error);
+    console.error('Errore durante l\'invio delle notifiche:', error);
     res.status(500).json({ success: false, error: error.message });
   }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server attivo sulla porta ${PORT}`);
 });
