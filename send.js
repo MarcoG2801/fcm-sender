@@ -80,3 +80,8 @@ app.post('/api/send-notification', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server attivo sulla porta ${PORT}`);
+});
