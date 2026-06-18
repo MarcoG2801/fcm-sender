@@ -6,7 +6,8 @@
     "start": "node send.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "firebase-admin": "^12.1.0"
+    "cors": "^2.8.6",
+    "express": "^4.22.2",
+    "firebase-admin": "^12.7.0"
   }
 }
