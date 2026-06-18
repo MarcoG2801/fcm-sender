@@ -1,9 +1,9 @@
 {
   "name": "fcm-backend-render",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "send.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node send.js"
   },
   "dependencies": {
     "express": "^4.19.2",
