@@ -8,28 +8,41 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Definizione del percorso del Secret File di Render
 const renderSecretPath = '/etc/secrets/service-account.json';
 const localSecretPath = './serviceAccountKey.json';
 
-let serviceAccount;
+let serviceAccountData;
 
-// Controlla se il file esiste nel percorso dei Secret Files di Render
-if (fs.existsSync(renderSecretPath)) {
-  serviceAccount = require(renderSecretPath);
-  console.log("Inizializzazione Firebase con il Secret File di Render.");
-} else if (fs.existsSync(localSecretPath)) {
-  serviceAccount = require(localSecretPath);
-  console.log("Inizializzazione Firebase con il file locale (Sviluppo).");
-} else {
-  console.error("ERRORE: File delle credenziali Firebase non trovato!");
-  process.exit(1); // Blocca l'applicazione se manca il file
+try {
+  if (fs.existsSync(renderSecretPath)) {
+    // Forza la lettura del file grezzo da Render (Evita la cache di require)
+    const rawData = fs.readFileSync(renderSecretPath, 'utf8');
+    serviceAccountData = JSON.parse(rawData);
+    console.log("✅ Secret File di Render letto con successo via fs.readFileSync.");
+  } else if (fs.existsSync(localSecretPath)) {
+    const rawData = fs.readFileSync(localSecretPath, 'utf8');
+    serviceAccountData = JSON.parse(rawData);
+    console.log("🏠 File locale (Sviluppo) letto con successo.");
+  } else {
+    throw new Error("Nessun file di credenziali trovato nei percorsi specificati.");
+  }
+
+  // Inizializzazione esplicita passando l'oggetto certificato
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccountData)
+  });
+  
+  console.log("🚀 Firebase Admin SDK inizializzato correttamente!");
+
+} catch (err) {
+  console.error("❌ ERRORE CRITICO INIZIALIZZAZIONE FIREBASE:", err.message);
+  // Stampiamo le prime righe del path per capire cosa sta vedendo il server (senza mostrare la chiave privata)
+  if (fs.existsSync(renderSecretPath)) {
+     const testRead = fs.readFileSync(renderSecretPath, 'utf8').substring(0, 100);
+     console.log("Anteprima del file su Render per debug: ", testRead);
+  }
+  process.exit(1);
 }
-
-// Inizializzazione Firebase Admin SDK
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
 
 const db = admin.firestore();
 
