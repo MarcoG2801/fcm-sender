@@ -1,98 +1,72 @@
-const express = require('express');
-const admin = require('firebase-admin');
-const cors = require('cors');
-const fs = require('fs');
-require('dotenv').config();
+const express = require("express");
+const cors = require("cors");
+const { db, messaging } = require("./firebase");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const renderSecretPath = '/etc/secrets/service-account.json';
-const localSecretPath = './serviceAccountKey.json';
-
-let serviceAccountData;
-
-try {
-  if (fs.existsSync(renderSecretPath)) {
-    // Forza la lettura del file grezzo da Render (Evita la cache di require)
-    const rawData = fs.readFileSync(renderSecretPath, 'utf8');
-    serviceAccountData = JSON.parse(rawData);
-    console.log("✅ Secret File di Render letto con successo via fs.readFileSync.");
-  } else if (fs.existsSync(localSecretPath)) {
-    const rawData = fs.readFileSync(localSecretPath, 'utf8');
-    serviceAccountData = JSON.parse(rawData);
-    console.log("🏠 File locale (Sviluppo) letto con successo.");
-  } else {
-    throw new Error("Nessun file di credenziali trovato nei percorsi specificati.");
-  }
-
-  // Inizializzazione esplicita passando l'oggetto certificato
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccountData)
-  });
-  
-  console.log("🚀 Firebase Admin SDK inizializzato correttamente!");
-
-} catch (err) {
-  console.error("❌ ERRORE CRITICO INIZIALIZZAZIONE FIREBASE:", err.message);
-  // Stampiamo le prime righe del path per capire cosa sta vedendo il server (senza mostrare la chiave privata)
-  if (fs.existsSync(renderSecretPath)) {
-     const testRead = fs.readFileSync(renderSecretPath, 'utf8').substring(0, 100);
-     console.log("Anteprima del file su Render per debug: ", testRead);
-  }
-  process.exit(1);
-}
-
-const db = admin.firestore();
-
-// --- Il resto del tuo endpoint rimane identico ---
-app.post('/api/send-notification', async (req, res) => {
-  const { centroId, title, body } = req.body;
-
-  if (!centroId || !title || !body) {
-    return res.status(400).json({ error: 'Campi mancanti.' });
-  }
-
+/**
+ * INVIO PUSH A TUTTI GLI UTENTI DI UN CENTRO
+ */
+app.post("/send-notification", async (req, res) => {
   try {
-    const usersSnapshot = await db.collection('users')
-      .where('centriIds', 'array-contains', centroId)
-      .get();
+    const { centroId, title, body } = req.body;
 
-    if (usersSnapshot.empty) {
-      return res.status(404).json({ message: 'Nessun utente trovato per questo centro.' });
+    if (!centroId) {
+      return res.status(400).json({ error: "centroId mancante" });
     }
 
+    // 🔍 1. prendi utenti del centro
+    const snapshot = await db
+      .collection("users")
+      .where("centriIds", "array-contains", centroId)
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({ message: "Nessun utente trovato" });
+    }
+
+    // 🔑 2. estrai token
     const tokens = [];
-    usersSnapshot.forEach(doc => {
-      const userData = doc.data();
-      if (userData.token) tokens.push(userData.token);
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.token) tokens.push(data.token);
     });
 
     if (tokens.length === 0) {
-      return res.status(404).json({ message: 'Nessun token FCM trovato.' });
+      return res.json({ message: "Nessun token disponibile" });
     }
 
+    // 📲 3. invio push multicast (max 500 token per volta)
     const message = {
-      notification: { title, body },
-      tokens: tokens,
+      notification: {
+        title: title || "Notifica",
+        body: body || "Hai una nuova comunicazione",
+      },
+      tokens,
     };
 
-    const response = await admin.messaging().sendEachForMulticast(message);
-    
-    return res.status(200).json({
-      success: true,
-      successCount: response.successCount,
-      message: `Notifiche inviate a ${response.successCount} dispositivi.`
-    });
+    const response = await messaging.sendEachForMulticast(message);
 
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: error.message });
+    res.json({
+      success: true,
+      sent: response.successCount,
+      failed: response.failureCount,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server attivo sulla porta ${PORT}`);
+/**
+ * HEALTHCHECK
+ */
+app.get("/", (req, res) => {
+  res.send("Push server running");
 });
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server running on port " + PORT));
