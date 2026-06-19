@@ -5,6 +5,9 @@ const serviceAccount = JSON.parse(
   fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, "utf8")
 );
 
+console.log(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
